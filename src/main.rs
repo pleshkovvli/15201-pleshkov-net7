@@ -21,9 +21,10 @@ use std::collections::HashMap;
 use std::clone::Clone;
 use std::env;
 use std::process::exit;
-use std::net::{lookup_host, SocketAddr, IpAddr, Ipv4Addr, LookupHost};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
 use mio::*;
+use mio::Evented;
 use mio::Poll;
 use mio::net::{TcpListener, TcpStream};
 
@@ -55,6 +56,8 @@ fn main() {
         }
     };
 
+    println!("r_port {}", r_port);
+
     let r_host = r_host.next().unwrap();
 
     let localaddr = sock_addr_ip_unspecified(l_port);
@@ -78,7 +81,6 @@ fn main() {
     let mut events = Events::with_capacity(MAX_CONNECTION_COUNT);
 
     let mut token_connections: HashMap<Token, Rc<RefCell<Connection>>> = HashMap::new();
-    let mut token_streams: HashMap<Token, TcpStream> = HashMap::new();
 
     loop {
         match poll.poll(&mut events, None) {
@@ -111,6 +113,12 @@ fn main() {
                 let client_token = token_gen.next_token();
                 let server_token = token_gen.next_token();
 
+                poll.register(&client, client_token, Ready::readable(), PollOpt::level())
+                    .expect("Failed to register");
+
+                poll.register(&server, server_token, Ready::readable(), PollOpt::level())
+                    .expect("Failed to register");
+
                 let mut connection = Connection::new(
                     TokenStream {
                         stream: client,
@@ -123,20 +131,44 @@ fn main() {
                 );
 
                 let rc_connection = Rc::new(RefCell::new(connection));
+
                 token_connections.insert(client_token, Rc::clone(&rc_connection));
                 token_connections.insert(server_token, Rc::clone(&rc_connection));
-//                let streams = &rc_connection.borrow().streams;
-//
-//                poll.register(streams[0].stream, client_token,
-//                              Ready::readable(), PollOpt::level())
-//                    .expect("Failed to register");
-//
-//                poll.register(streams[1].stream, server_token,
-//                              Ready::readable(), PollOpt::level())
-//                    .expect("Failed to register");
             } else {
-                let mut connection = token_connections[&token].borrow_mut();
-                connection.handle_event(token, event);
+                let tokens = token_connections[&token].borrow().tokens();
+                let mut end_connection = false;
+
+                loop {
+                    let mut connection = token_connections[&token].borrow_mut();
+                    let ready
+                    = match connection.handle_event(token, event) {
+                        Ok(result) => match result {
+                            ConnectionResult::Continue(token, other) => (token, other),
+                            ConnectionResult::Close => {
+                                end_connection = true;
+                                break;
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("Connection broken: {}", e);
+                            end_connection = true;
+                            break;
+                        }
+                    };
+
+
+                    poll.reregister(ready.0.stream, ready.0.token, ready.0.ready, PollOpt::level())
+                        .expect("Failed to register");
+
+                    poll.reregister(ready.1.stream, ready.1.token, ready.1.ready, PollOpt::level())
+                        .expect("Failed to register");
+                    break;
+                }
+
+                if end_connection {
+                    token_connections.remove(&tokens.0);
+                    token_connections.remove(&tokens.1);
+                }
             }
         }
     }

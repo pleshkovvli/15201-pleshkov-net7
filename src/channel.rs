@@ -1,5 +1,6 @@
 use std::io::{Read, Write, Result};
 use std::marker::PhantomData;
+
 pub struct Channel<R: Read, W: Write> {
     buffer: Box<[u8]>,
     begin: usize,
@@ -7,7 +8,8 @@ pub struct Channel<R: Read, W: Write> {
     capacity: usize,
     ph_read: PhantomData<R>,
     ph_write: PhantomData<W>,
-
+    pub src_closed: bool,
+    pub dest_closed: bool,
 }
 
 impl<'a, R: Read, W: Write> Channel<R, W> {
@@ -19,10 +21,16 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
             capacity: buf_size,
             ph_read: PhantomData,
             ph_write: PhantomData,
+            src_closed: false,
+            dest_closed: false,
         }
     }
 
-    pub fn recv_bytes(&mut self, src: &mut R) -> Result<usize> {
+    pub fn recv_bytes(&mut self, src: &mut R) -> Result<ChannelResult> {
+        if self.src_closed {
+            return Ok(ChannelResult::ReadClosed);
+        }
+
         let limit = if self.begin <= self.end {
             self.capacity
         } else {
@@ -30,16 +38,26 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
         };
 
         if limit == self.end {
-            return Ok(0);
+            return Ok(ChannelResult::Success(0));
         }
 
-        let read =  src.read(&mut self.buffer[self.end..limit])?;
+        let read = src.read(&mut self.buffer[self.end..limit])?;
+
+        if read == 0 {
+            self.src_closed = true;
+            return Ok(ChannelResult::ReadClosed);
+        }
+
         self.end += read;
 
-        Ok(read)
+        Ok(ChannelResult::Success(read))
     }
 
-    pub fn send_bytes(&mut self, dest: &mut W) -> Result<usize> {
+    pub fn send_bytes(&mut self, dest: &mut W) -> Result<ChannelResult> {
+        if self.dest_closed {
+            return Ok(ChannelResult::WriteClosed);
+        }
+
         let limit = if self.begin <= self.end {
             self.end
         } else {
@@ -47,10 +65,11 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
         };
 
         if limit == self.begin {
-            return Ok(0);
+            return Ok(ChannelResult::Success(0));
         }
 
         let write = dest.write(&mut self.buffer[self.begin..limit])?;
+
         self.begin += write;
 
         if self.end == self.capacity && self.begin > 0 {
@@ -61,7 +80,7 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
             self.begin = 0
         }
 
-        Ok(write)
+        Ok(ChannelResult::Success(write))
     }
 
     pub fn free_space(&self) -> usize {
@@ -79,5 +98,11 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
             self.capacity + self.end - self.begin
         }
     }
+}
+
+pub enum ChannelResult {
+    Success(usize),
+    ReadClosed,
+    WriteClosed
 }
 

@@ -45,8 +45,8 @@ impl error::Error for NetworkParamsError {
 
     fn cause(&self) -> Option<&error::Error> {
         match self {
-            &NetworkParamsError::Parse(e) => Some(&e),
-            &NetworkParamsError::Lookup(e) => Some(&e),
+            &NetworkParamsError::Parse(ref e) => Some(e),
+            &NetworkParamsError::Lookup(ref e) => Some(e),
         }
     }
 }
