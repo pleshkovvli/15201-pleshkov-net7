@@ -39,6 +39,8 @@ pub struct EventChannels<'a> {
 
 impl<'a> EventChannels<'a> {
     fn read_from_event(&mut self) -> Result<ChannelResult> {
+        println!("READING FROM {}", self.event_stream.peer_addr()?);
+
         match self.from_event.recv_bytes(self.event_stream)? {
             ChannelResult::ReadClosed => {
                 self.closing = &true;
@@ -54,7 +56,8 @@ impl<'a> EventChannels<'a> {
     }
 
     fn write_to_event(&mut self) -> Result<ChannelResult> {
-        self.from_other.send_bytes(self.other_stream)
+        println!("WRITING ON {}", self.event_stream.peer_addr()?);
+        self.from_other.send_bytes(self.event_stream)
     }
 
     fn check_shutdown(from: &'a mut TcpChannel, dest_stream: &'a mut TcpStream) -> Result<bool> {
@@ -69,11 +72,13 @@ impl<'a> EventChannels<'a> {
         return Ok(false);
     }
 
-    fn check_shutdowns(&mut self) {
+    fn check_shutdowns(&mut self) -> Result<bool> {
         if *self.closing {
-            Self::check_shutdown(self.from_event, self.other_stream);
-            Self::check_shutdown(self.from_other, self.event_stream);
+            Self::check_shutdown(self.from_event, self.other_stream)?;
+            Self::check_shutdown(self.from_other, self.event_stream)?;
         }
+
+        Ok(false)
     }
 
     fn all_closed(&self) -> bool {
@@ -140,6 +145,8 @@ impl Connection {
             event_channels.write_to_event()?;
         }
 
+        event_channels.check_shutdowns()?;
+
         if event_channels.all_closed() {
             return Ok(ConnectionResult::Close)
         }
@@ -158,24 +165,24 @@ impl Connection {
         ))
     }
 
-    fn check_shutdown(from: &mut TcpChannel, dest_stream: &mut TcpStream) -> Result<bool> {
-        if from.src_closed && !from.dest_closed {
-            if from.bytes_available() == 0 {
-                dest_stream.shutdown(Shutdown::Write)?;
-                from.dest_closed = true;
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
-    fn all_closed(&self) -> bool {
-        return self.from_client.src_closed
-            && self.from_client.dest_closed
-            && self.from_server.src_closed
-            && self.from_server.dest_closed;
-    }
+//    fn check_shutdown(from: &mut TcpChannel, dest_stream: &mut TcpStream) -> Result<bool> {
+//        if from.src_closed && !from.dest_closed {
+//            if from.bytes_available() == 0 {
+//                dest_stream.shutdown(Shutdown::Write)?;
+//                from.dest_closed = true;
+//                return Ok(true);
+//            }
+//        }
+//
+//        Ok(false)
+//    }
+//
+//    fn all_closed(&self) -> bool {
+//        return self.from_client.src_closed
+//            && self.from_client.dest_closed
+//            && self.from_server.src_closed
+//            && self.from_server.dest_closed;
+//    }
 
     fn channels_on_token(&mut self, token: Token) -> Option<EventChannels> {
         let channels = if token == self.client.token {
