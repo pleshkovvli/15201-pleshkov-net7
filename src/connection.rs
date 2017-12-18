@@ -39,12 +39,6 @@ pub struct EventChannels<'a> {
 
 impl<'a> EventChannels<'a> {
     fn read_from_event(&mut self) -> Result<ChannelResult> {
-        let addr = match self.event_stream.peer_addr() {
-            Ok(addr) => addr.to_string(),
-            Err(e) => String::from("UNKNOWN"),
-        };
-        //println!("READING FROM {}", addr);
-
         match self.from_event.recv_bytes(self.event_stream)? {
             ChannelResult::ReadClosed => {
                 self.closing = &true;
@@ -108,16 +102,11 @@ impl Connection {
     }
 
     fn get_event_stream_ready(channels: &EventChannels) -> Ready {
-//        let mut ready = Ready::empty();
-//        if channels.from_event.free_space() > 0 && !channels.from_event.src_closed {
-//            ready.insert(Ready::readable());
-//        }
-//        if channels.from_other.bytes_available() > 0 && !channels.from_event.dest_closed {
-//            ready.insert(Ready::writable());
-//        }
-//
-//        ready
         Self::get_stream_ready(&channels.from_event, &channels.from_other)
+    }
+
+    fn get_other_stream_ready(channels: &EventChannels) -> Ready {
+        Self::get_stream_ready(&channels.from_other, &channels.from_event)
     }
 
     fn get_stream_ready(channel: &TcpChannel, other_channel: &TcpChannel) -> Ready {
@@ -130,19 +119,6 @@ impl Connection {
         }
 
         ready
-    }
-
-    fn get_other_stream_ready(channels: &EventChannels) -> Ready {
-//        let mut ready = Ready::empty();
-//        if channels.from_other.free_space() > 0 {
-//            ready.insert(Ready::readable());
-//        }
-//        if channels.from_event.bytes_available() > 0 {
-//            ready.insert(Ready::writable());
-//        }
-//
-//        ready
-        Self::get_stream_ready(&channels.from_other, &channels.from_event)
     }
 
     pub fn tokens(&self) -> (Token, Token) {
@@ -182,25 +158,6 @@ impl Connection {
             },
         ))
     }
-
-//    fn check_shutdown(from: &mut TcpChannel, dest_stream: &mut TcpStream) -> Result<bool> {
-//        if from.src_closed && !from.dest_closed {
-//            if from.bytes_available() == 0 {
-//                dest_stream.shutdown(Shutdown::Write)?;
-//                from.dest_closed = true;
-//                return Ok(true);
-//            }
-//        }
-//
-//        Ok(false)
-//    }
-//
-//    fn all_closed(&self) -> bool {
-//        return self.from_client.src_closed
-//            && self.from_client.dest_closed
-//            && self.from_server.src_closed
-//            && self.from_server.dest_closed;
-//    }
 
     fn channels_on_token(&mut self, token: Token) -> Option<EventChannels> {
         let channels = if token == self.client.token {
