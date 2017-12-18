@@ -43,19 +43,19 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
 
         let read = src.read(&mut self.buffer[self.end..limit])?;
 
-        println!("----RECV----begin:{}, end:{}", self.begin, self.end);
-        let string = String::from_utf8_lossy(&self.buffer[self.end..(self.end + read)]);
-        print!("{}", string);
+        //println!("----RECV----begin:{}, end:{}", self.begin, self.end);
+//        let string = String::from_utf8_lossy(&self.buffer[self.end..(self.end + read)]);
+//        print!("{}", string);
 
         if read == 0 {
-            println!("CLOSING");
+            //println!("CLOSING");
             self.src_closed = true;
             return Ok(ChannelResult::ReadClosed);
         }
 
         self.end += read;
 
-        println!("----RECVEND----begin:{}, end:{}", self.begin, self.end);
+        //println!("----RECVEND----begin:{}, end:{}", self.begin, self.end);
 
         Ok(ChannelResult::Success(read))
     }
@@ -77,9 +77,9 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
 
         let write = dest.write(&mut self.buffer[self.begin..limit])?;
 
-        println!("----SEND----begin:{}, end:{}", self.begin, self.end);
-        let string = String::from_utf8_lossy(&self.buffer[self.begin..(self.begin + write)]);
-        print!("{}", string);
+        //println!("----SEND----begin:{}, end:{}", self.begin, self.end);
+//        let string = String::from_utf8_lossy(&self.buffer[self.begin..(self.begin + write)]);
+//        print!("{}", string);
 
         self.begin += write;
 
@@ -91,7 +91,7 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
             self.begin = 0
         }
 
-        println!("----SENDEND----begin:{}, end:{}", self.begin, self.end);
+        //println!("----SENDEND----begin:{}, end:{}", self.begin, self.end);
 
         Ok(ChannelResult::Success(write))
     }

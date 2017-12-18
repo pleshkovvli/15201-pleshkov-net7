@@ -96,8 +96,7 @@ fn main() {
         for event in events.iter() {
             let token = event.token();
 
-            println!("EVENT: R {}, W {}, TOKEN: {}",
-                     event.readiness().is_readable(), event.readiness().is_writable(), token.0);
+            //println!("EVENT: R {}, W {}, TOKEN: {}", event.readiness().is_readable(), event.readiness().is_writable(), token.0);
 
             if token == server_token {
                 let client: TcpStream = match listener.accept() {
@@ -141,7 +140,7 @@ fn main() {
                 token_connections.insert(client_token, Rc::clone(&rc_connection));
                 token_connections.insert(server_token, Rc::clone(&rc_connection));
 
-                println!("New connection added with tokens: {} {}", client_token.0, server_token.0);
+                //println!("New connection added with tokens: {} {}", client_token.0, server_token.0);
             } else {
                 let tokens = token_connections[&token].borrow().tokens();
                 let mut end_connection = false;

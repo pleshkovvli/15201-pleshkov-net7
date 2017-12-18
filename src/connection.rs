@@ -10,7 +10,7 @@ use mio::Ready;
 use mio::Event;
 use std::io::Result;
 
-const BUFFER_SIZE: usize = 8192;
+const BUFFER_SIZE: usize = 8 * 1024;
 
 type TcpChannel = Channel<TcpStream, TcpStream>;
 
@@ -39,7 +39,11 @@ pub struct EventChannels<'a> {
 
 impl<'a> EventChannels<'a> {
     fn read_from_event(&mut self) -> Result<ChannelResult> {
-        println!("READING FROM {}", self.event_stream.peer_addr()?);
+        let addr = match self.event_stream.peer_addr() {
+            Ok(addr) => addr.to_string(),
+            Err(e) => String::from("UNKNOWN"),
+        };
+        //println!("READING FROM {}", addr);
 
         match self.from_event.recv_bytes(self.event_stream)? {
             ChannelResult::ReadClosed => {
@@ -56,7 +60,7 @@ impl<'a> EventChannels<'a> {
     }
 
     fn write_to_event(&mut self) -> Result<ChannelResult> {
-        println!("WRITING ON {}", self.event_stream.peer_addr()?);
+        //println!("WRITING ON {}", self.event_stream.peer_addr()?);
         self.from_other.send_bytes(self.event_stream)
     }
 
@@ -103,28 +107,42 @@ impl Connection {
         Connection { client, server, from_client, from_server, closing: false }
     }
 
-    fn get_stream_ready(channels: &EventChannels) -> Ready {
+    fn get_event_stream_ready(channels: &EventChannels) -> Ready {
+//        let mut ready = Ready::empty();
+//        if channels.from_event.free_space() > 0 && !channels.from_event.src_closed {
+//            ready.insert(Ready::readable());
+//        }
+//        if channels.from_other.bytes_available() > 0 && !channels.from_event.dest_closed {
+//            ready.insert(Ready::writable());
+//        }
+//
+//        ready
+        Self::get_stream_ready(&channels.from_event, &channels.from_other)
+    }
+
+    fn get_stream_ready(channel: &TcpChannel, other_channel: &TcpChannel) -> Ready {
         let mut ready = Ready::empty();
-        if channels.from_event.free_space() > 0 {
+        if channel.free_space() > 0 && !channel.src_closed {
             ready.insert(Ready::readable());
         }
-        if channels.from_other.bytes_available() > 0 {
+        if other_channel.bytes_available() > 0 && !other_channel.dest_closed {
             ready.insert(Ready::writable());
         }
 
         ready
     }
 
-    fn get_stream_ready_reverse(channels: &EventChannels) -> Ready {
-        let mut ready = Ready::empty();
-        if channels.from_other.free_space() > 0 {
-            ready.insert(Ready::readable());
-        }
-        if channels.from_event.bytes_available() > 0 {
-            ready.insert(Ready::writable());
-        }
-
-        ready
+    fn get_other_stream_ready(channels: &EventChannels) -> Ready {
+//        let mut ready = Ready::empty();
+//        if channels.from_other.free_space() > 0 {
+//            ready.insert(Ready::readable());
+//        }
+//        if channels.from_event.bytes_available() > 0 {
+//            ready.insert(Ready::writable());
+//        }
+//
+//        ready
+        Self::get_stream_ready(&channels.from_other, &channels.from_event)
     }
 
     pub fn tokens(&self) -> (Token, Token) {
@@ -155,12 +173,12 @@ impl Connection {
             TokenReady {
                 token: event_channels.event_token,
                 stream: event_channels.event_stream,
-                ready: Self::get_stream_ready(&event_channels),
+                ready: Self::get_event_stream_ready(&event_channels),
             },
             TokenReady {
                 token: event_channels.other_token,
                 stream: event_channels.other_stream,
-                ready: Self::get_stream_ready_reverse(&event_channels),
+                ready: Self::get_other_stream_ready(&event_channels),
             },
         ))
     }
