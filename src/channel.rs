@@ -12,7 +12,7 @@ pub struct Channel<R: Read, W: Write> {
     pub dest_closed: bool,
 }
 
-impl<'a, R: Read, W: Write> Channel<R, W> {
+impl<R: Read, W: Write> Channel<R, W> {
     pub fn new(buf_size: usize) -> Channel<R, W> {
         Channel {
             buffer: Box::from(vec![0; buf_size]),
@@ -43,19 +43,12 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
 
         let read = src.read(&mut self.buffer[self.end..limit])?;
 
-        //println!("----RECV----begin:{}, end:{}", self.begin, self.end);
-//        let string = String::from_utf8_lossy(&self.buffer[self.end..(self.end + read)]);
-//        print!("{}", string);
-
         if read == 0 {
-            //println!("CLOSING");
             self.src_closed = true;
             return Ok(ChannelResult::ReadClosed);
         }
 
         self.end += read;
-
-        //println!("----RECVEND----begin:{}, end:{}", self.begin, self.end);
 
         Ok(ChannelResult::Success(read))
     }
@@ -77,10 +70,6 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
 
         let write = dest.write(&mut self.buffer[self.begin..limit])?;
 
-        //println!("----SEND----begin:{}, end:{}", self.begin, self.end);
-//        let string = String::from_utf8_lossy(&self.buffer[self.begin..(self.begin + write)]);
-//        print!("{}", string);
-
         self.begin += write;
 
         if self.end == self.capacity && self.begin > 0 {
@@ -90,8 +79,6 @@ impl<'a, R: Read, W: Write> Channel<R, W> {
         if self.begin == self.capacity {
             self.begin = 0
         }
-
-        //println!("----SENDEND----begin:{}, end:{}", self.begin, self.end);
 
         Ok(ChannelResult::Success(write))
     }

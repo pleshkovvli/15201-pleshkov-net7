@@ -32,10 +32,6 @@ const EXIT_FAILURE: i32 = 1;
 
 const MAX_CONNECTIONS_COUNT: usize = 1024;
 
-fn sock_addr_ip_unspecified(port: u16) -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(<Ipv4Addr>::unspecified()), port)
-}
-
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -115,13 +111,13 @@ fn handle_client_event(
     event: Event,
     token: Token,
     poll: &Poll,
-    connections: &mut HashMap<Token, Rc<RefCell<Connection>>>,
+    connections: &mut HashMap<Token, Rc<RefCell<Connection>>>
 ) -> Option<(Token, Token)> {
     let mut connection = match connections.get(&token) {
         Some(ref connection) => connection.borrow_mut(),
         None => return None,
     };
-    
+
     let tokens = connection.tokens();
 
     let ready: Option<(TokenReady, TokenReady)> = match connection.handle_event(token, event) {
@@ -194,4 +190,8 @@ fn handle_server_event(
     let rc_connection = Rc::new(RefCell::new(connection));
     connections.insert(client_token, Rc::clone(&rc_connection));
     connections.insert(server_token, Rc::clone(&rc_connection));
+}
+
+fn sock_addr_ip_unspecified(port: u16) -> SocketAddr {
+    SocketAddr::new(IpAddr::V4(<Ipv4Addr>::unspecified()), port)
 }

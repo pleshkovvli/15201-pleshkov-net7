@@ -54,7 +54,6 @@ impl<'a> EventChannels<'a> {
     }
 
     fn write_to_event(&mut self) -> Result<ChannelResult> {
-        //println!("WRITING ON {}", self.event_stream.peer_addr()?);
         self.from_other.send_bytes(self.event_stream)
     }
 
@@ -101,26 +100,6 @@ impl Connection {
         Connection { client, server, from_client, from_server, closing: false }
     }
 
-    fn get_event_stream_ready(channels: &EventChannels) -> Ready {
-        Self::get_stream_ready(&channels.from_event, &channels.from_other)
-    }
-
-    fn get_other_stream_ready(channels: &EventChannels) -> Ready {
-        Self::get_stream_ready(&channels.from_other, &channels.from_event)
-    }
-
-    fn get_stream_ready(channel: &TcpChannel, other_channel: &TcpChannel) -> Ready {
-        let mut ready = Ready::empty();
-        if channel.free_space() > 0 && !channel.src_closed {
-            ready.insert(Ready::readable());
-        }
-        if other_channel.bytes_available() > 0 && !other_channel.dest_closed {
-            ready.insert(Ready::writable());
-        }
-
-        ready
-    }
-
     pub fn tokens(&self) -> (Token, Token) {
         (self.client.token, self.server.token)
     }
@@ -157,6 +136,26 @@ impl Connection {
                 ready: Self::get_other_stream_ready(&event_channels),
             },
         ))
+    }
+
+    fn get_event_stream_ready(channels: &EventChannels) -> Ready {
+        Self::get_stream_ready(&channels.from_event, &channels.from_other)
+    }
+
+    fn get_other_stream_ready(channels: &EventChannels) -> Ready {
+        Self::get_stream_ready(&channels.from_other, &channels.from_event)
+    }
+
+    fn get_stream_ready(channel: &TcpChannel, other_channel: &TcpChannel) -> Ready {
+        let mut ready = Ready::empty();
+        if channel.free_space() > 0 && !channel.src_closed {
+            ready.insert(Ready::readable());
+        }
+        if other_channel.bytes_available() > 0 && !other_channel.dest_closed {
+            ready.insert(Ready::writable());
+        }
+
+        ready
     }
 
     fn channels_on_token(&mut self, token: Token) -> Option<EventChannels> {
